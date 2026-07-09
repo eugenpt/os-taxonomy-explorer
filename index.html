@@ -360,11 +360,10 @@ async function load() {
     // Check URL hash for initial topic
     const initialId = parseHash();
     if (initialId && topicById[initialId]) {
-      // Need to ensure the topic is visible (clear filters if needed)
-      // First render with filters, then expand
+      // Apply filters first, then expand topic
       rows_data = [...topics];
-      render();
-      // If topic not visible after filtering, reset and re-render
+      filterAndRender();
+      // If the topic isn't in the filtered view, clear filters
       if (!document.querySelector(`tr.row-main[data-id="${initialId}"]`)) {
         rows_data = [...topics];
         filterAndRender();
