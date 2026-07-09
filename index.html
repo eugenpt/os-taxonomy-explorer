@@ -97,6 +97,14 @@
 
   .result-count { color: var(--text-muted); font-size: 13px; }
 
+  /* Sticky filters */
+  .sticky-filters {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--bg); padding-top: 16px; margin-top: -16px;
+  }
+  .sticky-filters .toolbar { margin-bottom: 12px; }
+  .sticky-filters .toolbar + .toolbar { margin-top: -4px; }
+
   .table-wrap {
     overflow-x: auto; border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -268,6 +276,7 @@
     <span class="topic-path" id="topic-path"></span>
   </div>
 
+  <div class="sticky-filters">
   <div class="toolbar" id="toolbar">
     <div class="search-wrap">
       <span class="icon">⌕</span>
@@ -302,6 +311,7 @@
       <span class="age-clear" id="age-clear">✕ clear</span>
     </div>
     <span class="result-count" id="result-count">Showing 0 topics</span>
+  </div>
   </div>
 
   <div class="table-wrap">
@@ -1049,7 +1059,10 @@ function render() {
     const detail = document.querySelector(`tr.row-detail[data-detail-id="${expandedId}"]`);
     if (detail) detail.classList.add('open');
     const main = document.querySelector(`tr.row-main[data-id="${expandedId}"]`);
-    if (main) main.classList.add('highlighted');
+    if (main) {
+      main.classList.add('highlighted');
+      main.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 }
 
