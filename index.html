@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="version" content="2026-07-09.1">
+<meta name="version" content="2026-07-09.2">
 <title>OS Taxonomy Explorer</title>
 <style>
   :root {
@@ -97,6 +97,15 @@
   .age-clear:hover { border-color: var(--border); color: var(--text); }
 
   .result-count { color: var(--text-muted); font-size: 13px; }
+
+  .export-btn {
+    margin-left: auto; padding: 5px 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-muted);
+    font-size: 12px; cursor: pointer; white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .export-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
 
   /* Sticky filters */
   .sticky-filters {
@@ -312,6 +321,7 @@
       <span class="age-clear" id="age-clear">✕ clear</span>
     </div>
     <span class="result-count" id="result-count">Showing 0 topics</span>
+    <button class="export-btn" id="export-btn">⬇ CSV</button>
   </div>
   </div>
 
@@ -1117,6 +1127,42 @@ document.addEventListener('keydown', e => {
     document.getElementById('search').focus();
   }
 });
+
+// ── Export CSV ────────────────────────────────────────────────────────────
+document.getElementById('export-btn').addEventListener('click', () => {
+  const data = rows_data.length ? rows_data : topics;
+  const headers = ['Name', 'Subject', 'Domain', 'Type', 'Age Start', 'Age End', 'Description', 'Evidence', 'Assessment Prompt', 'Centrality', 'Standards'];
+  const rows = data.map(t => [
+    csvEsc(t.name),
+    csvEsc(t.subject),
+    csvEsc(t.domain),
+    csvEsc(t.type),
+    t.ageRangeStart,
+    t.ageRangeEnd,
+    csvEsc(t.description),
+    csvEsc((t.evidence || []).join('; ')),
+    csvEsc((t.assessmentPrompt || '').replace(/\{\{name\}\}/g, '[name]')),
+    t.centrality,
+    csvEsc((t.standards || []).join('; ')),
+  ]);
+  const csv = '\uFEFF' + headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const label = document.getElementById('subject').value || 'all';
+  const ts = new Date().toISOString().slice(0, 10);
+  a.download = `os-taxonomy-${label}-${ts}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+function csvEsc(s) {
+  if (s == null) return '';
+  s = String(s);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
 
 // ── Up button ─────────────────────────────────────────────────────────────
 const upBtn = document.getElementById('up-btn');
