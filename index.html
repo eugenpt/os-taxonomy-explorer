@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="version" content="2026-07-09.2">
+<meta name="version" content="2026-07-09.3">
 <title>OS Taxonomy Explorer</title>
 <style>
   :root {
@@ -1129,9 +1129,25 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Export CSV ────────────────────────────────────────────────────────────
+function prereqNames(id) {
+  const info = depsById[id];
+  if (!info || !info.prereqs.length) return '';
+  return info.prereqs.map(d => {
+    const t = topicById[d.prerequisiteId];
+    return (t ? t.name : d.prerequisiteId) + ' (' + d.strength + ')';
+  }).join('; ');
+}
+function unlockNames(id) {
+  const info = depsById[id];
+  if (!info || !info.unlocks.length) return '';
+  return info.unlocks.map(d => {
+    const t = topicById[d.topicId];
+    return (t ? t.name : d.topicId) + ' (' + d.strength + ')';
+  }).join('; ');
+}
 document.getElementById('export-btn').addEventListener('click', () => {
   const data = rows_data.length ? rows_data : topics;
-  const headers = ['Name', 'Subject', 'Domain', 'Type', 'Age Start', 'Age End', 'Description', 'Evidence', 'Assessment Prompt', 'Centrality', 'Standards'];
+  const headers = ['Name', 'Subject', 'Domain', 'Type', 'Age Start', 'Age End', 'Description', 'Evidence', 'Assessment Prompt', 'Centrality', 'Standards', 'Prerequisites', 'Unlocks'];
   const rows = data.map(t => [
     csvEsc(t.name),
     csvEsc(t.subject),
@@ -1144,6 +1160,8 @@ document.getElementById('export-btn').addEventListener('click', () => {
     csvEsc((t.assessmentPrompt || '').replace(/\{\{name\}\}/g, '[name]')),
     t.centrality,
     csvEsc((t.standards || []).join('; ')),
+    csvEsc(prereqNames(t.id)),
+    csvEsc(unlockNames(t.id)),
   ]);
   const csv = '\uFEFF' + headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
