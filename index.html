@@ -186,6 +186,44 @@
   }
   .back-link:hover { background: var(--accent-glow); }
 
+  /* Searchable select */
+  .searchable-select {
+    position: relative; min-width: 160px;
+  }
+  .searchable-select input {
+    width: 100%; padding: 6px 10px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-size: 13px;
+    outline: none; cursor: pointer;
+  }
+  .searchable-select input:focus { border-color: var(--accent); }
+  .searchable-select input::placeholder { color: var(--text-muted); }
+  .searchable-select .arrow {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); font-size: 10px; pointer-events: none;
+    transition: transform 0.15s;
+  }
+  .searchable-select.open .arrow { transform: translateY(-50%) rotate(180deg); }
+  .searchable-select .panel {
+    display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+    margin-top: 2px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); max-height: 260px; overflow-y: auto;
+  }
+  .searchable-select.open .panel { display: block; }
+  .searchable-select .panel .search-in {
+    width: 100%; padding: 6px 8px; border: none; border-bottom: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 13px; outline: none;
+    position: sticky; top: 0;
+  }
+  .searchable-select .panel .opt {
+    padding: 6px 10px; cursor: pointer; font-size: 13px; color: var(--text);
+    transition: background 0.1s;
+  }
+  .searchable-select .panel .opt:hover { background: var(--accent-glow); }
+  .searchable-select .panel .opt.selected { background: rgba(88,166,255,0.2); color: var(--accent); }
+  .searchable-select .panel .opt.highlight { background: var(--accent-glow); }
+  .searchable-select .panel .no-match { padding: 8px; color: var(--text-muted); font-size: 12px; text-align: center; }
+
   @media (max-width: 768px) {
     body { padding: 12px; }
     .toolbar { flex-direction: column; align-items: stretch; }
@@ -220,7 +258,14 @@
     </div>
     <div class="filter-group">
       <label for="domain">Domain</label>
-      <select id="domain"><option value="">All</option></select>
+      <div class="searchable-select" id="domain-select">
+        <input type="text" id="domain-input" placeholder="All" readonly autocomplete="off">
+        <span class="arrow">▼</span>
+        <div class="panel">
+          <input type="text" class="search-in" placeholder="Search domains…" autocomplete="off">
+          <div class="opts-wrap"></div>
+        </div>
+      </div>
     </div>
     <div class="filter-group">
       <label for="type">Type</label>
@@ -462,12 +507,7 @@ function populateFilters() {
   }
 
   const domains = [...new Set(topics.map(t => t.domain))].sort();
-  const selD = document.getElementById('domain');
-  for (const d of domains) {
-    const o = document.createElement('option');
-    o.value = d; o.textContent = d;
-    selD.appendChild(o);
-  }
+  buildDomainDropdown(domains);
 
   const types = [...new Set(topics.map(t => t.type))].sort();
   const selT = document.getElementById('type');
@@ -485,6 +525,125 @@ function populateFilters() {
     s.addEventListener('click', () => toggleAge(a));
     pills.appendChild(s);
   }
+}
+
+// ── Searchable Domain Dropdown ─────────────────────────────────────────────
+let domainOptions = [];
+let domainValue = '';
+
+function buildDomainDropdown(domains) {
+  domainOptions = domains;
+  const wrap = document.querySelector('#domain-select .opts-wrap');
+  const container = document.getElementById('domain-select');
+  const input = document.getElementById('domain-input');
+  const searchIn = container.querySelector('.search-in');
+
+  function renderOptions(filter) {
+    const q = (filter || '').toLowerCase();
+    const filtered = domainOptions.filter(d => !q || d.toLowerCase().includes(q));
+    if (filtered.length === 0) {
+      wrap.innerHTML = '<div class="no-match">No matching domains</div>';
+      return;
+    }
+    wrap.innerHTML = filtered.map(d =>
+      `<div class="opt${d === domainValue ? ' selected' : ''}" data-val="${d}">${escapeHtml(d)}</div>`
+    ).join('');
+
+    // Click to select
+    wrap.querySelectorAll('.opt').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const val = el.dataset.val;
+        domainValue = val;
+        input.value = val;
+        container.classList.remove('open');
+        filterAndRender();
+      });
+    });
+
+    // Hover tracking for keyboard nav
+    wrap.querySelectorAll('.opt').forEach(el => {
+      el.addEventListener('mouseenter', () => {
+        wrap.querySelectorAll('.opt.highlight').forEach(h => h.classList.remove('highlight'));
+        el.classList.add('highlight');
+      });
+    });
+  }
+
+  // Toggle open/close
+  function openPanel() {
+    container.classList.add('open');
+    searchIn.value = '';
+    renderOptions('');
+    searchIn.focus();
+  }
+
+  input.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (container.classList.contains('open')) {
+      container.classList.remove('open');
+    } else {
+      openPanel();
+    }
+  });
+
+  searchIn.addEventListener('input', () => {
+    renderOptions(searchIn.value);
+  });
+
+  searchIn.addEventListener('keydown', (e) => {
+    const items = wrap.querySelectorAll('.opt');
+    const cur = wrap.querySelector('.opt.highlight');
+    let idx = -1;
+    if (cur) idx = [...items].indexOf(cur);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = Math.min(idx + 1, items.length - 1);
+      items.forEach(h => h.classList.remove('highlight'));
+      if (items[next]) items[next].classList.add('highlight');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = Math.max(idx - 1, 0);
+      items.forEach(h => h.classList.remove('highlight'));
+      if (items[prev]) items[prev].classList.add('highlight');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const highlighted = wrap.querySelector('.opt.highlight');
+      if (highlighted) {
+        domainValue = highlighted.dataset.val;
+        input.value = domainValue;
+        container.classList.remove('open');
+        filterAndRender();
+      }
+    } else if (e.key === 'Escape') {
+      container.classList.remove('open');
+    }
+  });
+
+  // Close on click outside
+  document.addEventListener('click', (e) => {
+    if (!container.contains(e.target)) {
+      container.classList.remove('open');
+    }
+  });
+
+  // Clear button in the domain input (when a value is selected, clicking again shows "All")
+  // Allow clearing by clicking the input when already selected and panel opens
+  renderOptions('');
+}
+
+function getDomainValue() {
+  return domainValue;
+}
+
+function setDomainValue(val) {
+  domainValue = val || '';
+  document.getElementById('domain-input').value = val || '';
+  // Update selection highlight
+  document.querySelectorAll('#domain-select .opt').forEach(el => {
+    el.classList.toggle('selected', el.dataset.val === val);
+  });
 }
 
 let selectingAgeEnd = false;
@@ -539,7 +698,7 @@ function matches(topic, query) {
 function filterAndRender() {
   const query = document.getElementById('search').value;
   const subj = document.getElementById('subject').value;
-  const dom = document.getElementById('domain').value;
+  const dom = getDomainValue();
   const typ = document.getElementById('type').value;
 
   let filtered = topics.filter(t => {
@@ -633,7 +792,7 @@ function navigateToTopic(id) {
     // Topic is filtered out — clear search and filters to show it
     document.getElementById('search').value = '';
     document.getElementById('subject').value = '';
-    document.getElementById('domain').value = '';
+    setDomainValue('');
     document.getElementById('type').value = '';
     ageFilter = { start: null, end: null };
     selectingAgeEnd = false;
@@ -800,19 +959,12 @@ document.getElementById('subject').addEventListener('change', () => {
   const doms = subj
     ? [...new Set(topics.filter(t => t.subject === subj).map(t => t.domain))].sort()
     : [...new Set(topics.map(t => t.domain))].sort();
-  const selD = document.getElementById('domain');
-  const curDom = selD.value;
-  selD.innerHTML = '<option value="">All</option>';
-  for (const d of doms) {
-    const o = document.createElement('option');
-    o.value = d; o.textContent = d;
-    selD.appendChild(o);
-  }
-  if (doms.includes(curDom)) selD.value = curDom;
-  else selD.value = '';
+  const curDom = getDomainValue();
+  buildDomainDropdown(doms);
+  if (doms.includes(curDom)) setDomainValue(curDom);
+  else setDomainValue('');
   filterAndRender();
 });
-document.getElementById('domain').addEventListener('change', filterAndRender);
 document.getElementById('type').addEventListener('change', filterAndRender);
 
 document.querySelectorAll('thead th').forEach(th => {
