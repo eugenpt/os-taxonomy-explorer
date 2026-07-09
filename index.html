@@ -232,6 +232,19 @@
   .searchable-select .panel .opt.highlight { background: var(--accent-glow); }
   .searchable-select .panel .no-match { padding: 8px; color: var(--text-muted); font-size: 12px; text-align: center; }
 
+  /* Up button */
+  .up-btn {
+    display: none; position: fixed; bottom: 24px; right: 24px; z-index: 50;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-muted); font-size: 18px; cursor: pointer;
+    align-items: center; justify-content: center;
+    transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .up-btn.visible { display: flex; }
+  .up-btn:hover { background: var(--accent-glow); color: var(--accent); border-color: var(--accent); }
+  .up-btn:active { transform: scale(0.92); }
+
   @media (max-width: 768px) {
     body { padding: 12px; }
     .toolbar { flex-direction: column; align-items: stretch; }
@@ -307,6 +320,8 @@
     </table>
   </div>
 </div>
+
+<button class="up-btn" id="up-btn" title="Scroll to top">↑</button>
 
 <script>
 // ── Config ─────────────────────────────────────────────────────────────────
@@ -413,7 +428,7 @@ function replaceHash(id) {
 
 function clearHash() {
   suppressingPop = true;
-  window.location.hash = '';
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
   suppressingPop = false;
   navStack = [];
   updateBackBar();
@@ -1076,6 +1091,15 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     document.getElementById('search').focus();
   }
+});
+
+// ── Up button ─────────────────────────────────────────────────────────────
+const upBtn = document.getElementById('up-btn');
+upBtn.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+window.addEventListener('scroll', () => {
+  upBtn.classList.toggle('visible', window.scrollY > 300);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────
