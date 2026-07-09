@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OS Taxonomy Explorer</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-glow: rgba(88,166,255,0.15);
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --radius: 8px;
+    --radius-sm: 4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  .header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px;
+  }
+  .header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .header h1 span { color: var(--text-muted); font-weight: 400; font-size: 14px; }
+  .header .stats { margin-top: 6px; color: var(--text-muted); font-size: 13px; }
+  .header .gh-link { color: var(--accent); font-size: 13px; text-decoration: none; }
+  .header .gh-link:hover { text-decoration: underline; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    margin-bottom: 16px; padding: 12px 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .search-wrap {
+    flex: 1; min-width: 200px; position: relative;
+  }
+  .search-wrap input {
+    width: 100%; padding: 8px 12px 8px 36px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-size: 14px; outline: none;
+  }
+  .search-wrap input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .search-wrap .icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 16px; pointer-events: none; }
+
+  .filter-group {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .filter-group label { color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .filter-group select {
+    padding: 6px 10px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-size: 13px;
+    outline: none; cursor: pointer;
+  }
+  .filter-group select:focus { border-color: var(--accent); }
+
+  .age-filter {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 0;
+  }
+  .age-filter label { color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+  .age-numbers { display: flex; gap: 2px; }
+  .age-numbers span {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;
+    border: 1px solid transparent; user-select: none; transition: all 0.15s;
+  }
+  .age-numbers span:hover { border-color: var(--accent); color: var(--accent); }
+  .age-numbers span.active { background: var(--accent); color: #fff; font-weight: 600; border-color: var(--accent); }
+  .age-numbers span.in-range { background: var(--accent-glow); border-color: var(--accent); }
+  .age-clear {
+    font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 2px 6px;
+    border-radius: var(--radius-sm); border: 1px solid transparent;
+  }
+  .age-clear:hover { border-color: var(--border); color: var(--text); }
+
+  .result-count { color: var(--text-muted); font-size: 13px; }
+
+  .table-wrap {
+    overflow-x: auto; border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  table {
+    width: 100%; border-collapse: collapse; min-width: 800px;
+  }
+  th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--surface); padding: 10px 12px;
+    text-align: left; font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-muted);
+    border-bottom: 1px solid var(--border); cursor: pointer;
+    white-space: nowrap; user-select: none;
+  }
+  th:hover { color: var(--text); }
+  th .sort-arrow { display: inline-block; margin-left: 4px; opacity: 0.3; }
+  th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+  td {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    vertical-align: top; color: var(--text);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr.row-main { cursor: pointer; transition: background 0.15s; }
+  tr.row-main:hover { background: rgba(88,166,255,0.06); }
+  tr.row-main.highlighted { background: rgba(88,166,255,0.12); }
+  tr.row-detail { display: none; }
+  tr.row-detail.open { display: table-row; }
+  tr.row-detail td { padding: 0; background: var(--surface); }
+  .detail-inner { padding: 16px 20px; max-width: 900px; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 500; white-space: nowrap;
+  }
+  .badge-subject { color: var(--accent); background: rgba(88,166,255,0.12); }
+  .badge-type { color: var(--yellow); background: rgba(210,153,34,0.12); }
+  .badge-age { color: var(--green); background: rgba(63,185,80,0.12); }
+  .desc { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+
+  .detail-section { margin-bottom: 14px; }
+  .detail-section h3 { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+  .detail-section ul { list-style: none; padding: 0; }
+  .detail-section li {
+    padding: 4px 0 4px 16px; position: relative; font-size: 13px; color: var(--text);
+  }
+  .detail-section li::before { content: '•'; position: absolute; left: 4px; color: var(--accent); }
+  .detail-prompt {
+    padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm);
+    border-left: 3px solid var(--yellow); font-size: 13px; color: var(--text);
+    font-style: italic;
+  }
+
+  .dep-item {
+    padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  }
+  .dep-item:last-child { border-bottom: none; }
+  .dep-strength { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+  .dep-strength.hard { background: rgba(248,81,73,0.15); color: var(--red); }
+  .dep-strength.soft { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .dep-name {
+    color: var(--accent); cursor: pointer; font-weight: 500;
+    transition: color 0.15s;
+  }
+  .dep-name:hover { color: #79c0ff; text-decoration: underline; }
+  .dep-reason { width: 100%; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+
+  .no-results { padding: 40px; text-align: center; color: var(--text-muted); }
+
+  .row-main .name-col { font-weight: 500; }
+  em.highlight { background: rgba(210,153,34,0.25); color: var(--yellow); font-style: normal; padding: 0 2px; border-radius: 2px; }
+
+  /* Back button */
+  .back-bar {
+    display: none; align-items: center; gap: 8px;
+    margin-bottom: 12px; padding: 8px 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); font-size: 13px;
+  }
+  .back-bar.visible { display: flex; }
+  .back-bar .topic-path { color: var(--text-muted); }
+  .back-bar .topic-path strong { color: var(--text); font-weight: 500; }
+  .back-link {
+    color: var(--accent); cursor: pointer; font-size: 13px;
+    padding: 2px 8px; border-radius: var(--radius-sm);
+  }
+  .back-link:hover { background: var(--accent-glow); }
+
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .toolbar { flex-direction: column; align-items: stretch; }
+    .filter-group { flex-wrap: wrap; }
+    .age-numbers span { width: 24px; height: 24px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>OS Taxonomy Explorer <span>v1</span></h1>
+      <div class="stats" id="stats">Loading…</div>
+    </div>
+    <a class="gh-link" href="https://github.com/withmarbleapp/os-taxonomy" target="_blank">github.com/withmarbleapp/os-taxonomy ↗</a>
+  </div>
+
+  <div class="back-bar" id="back-bar">
+    <span class="back-link" id="back-link">← Back</span>
+    <span class="topic-path" id="topic-path"></span>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <div class="search-wrap">
+      <span class="icon">⌕</span>
+      <input type="text" id="search" placeholder="Search topics…" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="filter-group">
+      <label for="subject">Subject</label>
+      <select id="subject"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="domain">Domain</label>
+      <select id="domain"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="type">Type</label>
+      <select id="type"><option value="">All</option></select>
+    </div>
+  </div>
+
+  <div class="toolbar" style="margin-top:-8px;">
+    <div class="age-filter">
+      <label>Age</label>
+      <div class="age-numbers" id="age-pills"></div>
+      <span class="age-clear" id="age-clear">✕ clear</span>
+    </div>
+    <span class="result-count" id="result-count">Showing 0 topics</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-col="name" class="sorted">Name <span class="sort-arrow">▲</span></th>
+          <th data-col="subject">Subject <span class="sort-arrow">▲</span></th>
+          <th data-col="domain">Domain <span class="sort-arrow">▲</span></th>
+          <th data-col="type">Type <span class="sort-arrow">▲</span></th>
+          <th data-col="ageStart" style="text-align:center;">Age <span class="sort-arrow">▲</span></th>
+          <th data-col="description">Description <span class="sort-arrow">▲</span></th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────
+const DATA_TOPICS    = 'https://raw.githubusercontent.com/withmarbleapp/os-taxonomy/main/data/topics.json';
+const DATA_DEPS      = 'https://raw.githubusercontent.com/withmarbleapp/os-taxonomy/main/data/dependencies.json';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let topics = [];
+let depsById = {};   // topicId -> {prereqs: [...], unlocks: [...]}
+let rows_data = [];
+let topicById = {};
+
+const AGE_MIN = 4, AGE_MAX = 15;
+let ageFilter = { start: null, end: null };
+let sortCol = 'name', sortDir = 1;
+
+// Navigation stack for URL-based back/forward
+let navStack = [];  // [{id, name}, ...]
+let suppressingPop = false;
+
+// ── Load ──────────────────────────────────────────────────────────────────
+async function load() {
+  try {
+    const [tRes, dRes] = await Promise.all([
+      fetch(DATA_TOPICS),
+      fetch(DATA_DEPS)
+    ]);
+    if (!tRes.ok || !dRes.ok) throw new Error(`HTTP ${tRes.status} / ${dRes.status}`);
+    const tData = await tRes.json();
+    const dData = await dRes.json();
+    topics = tData.topics;
+
+    topicById = {};
+    for (const t of topics) topicById[t.id] = t;
+
+    depsById = {};
+    for (const t of topics) {
+      depsById[t.id] = { prereqs: [], unlocks: [] };
+    }
+    for (const dep of dData.dependencies) {
+      if (depsById[dep.topicId]) depsById[dep.topicId].prereqs.push(dep);
+      if (depsById[dep.prerequisiteId]) depsById[dep.prerequisiteId].unlocks.push(dep);
+    }
+
+    document.getElementById('stats').textContent =
+      `${tData.topicCount} topics · ${dData.dependencies.length} dependencies · ages ${AGE_MIN}–${AGE_MAX}`;
+
+    populateFilters();
+    rows_data = [...topics];
+
+    // Check URL hash for initial topic
+    const initialId = parseHash();
+    if (initialId && topicById[initialId]) {
+      // We need to render first, then expand
+      render();
+      expandTopic(initialId, false);
+    } else {
+      render();
+    }
+  } catch (e) {
+    document.getElementById('stats').textContent =
+      'Error loading data — try reloading. If it persists, the upstream data source may be unavailable.';
+    console.error(e);
+  }
+}
+
+// ── URL Hash state ─────────────────────────────────────────────────────────
+function parseHash() {
+  const m = window.location.hash.match(/^#topic=(mt_\w+)$/);
+  return m ? m[1] : null;
+}
+
+function pushHash(id) {
+  const topic = topicById[id];
+  if (!topic) return;
+
+  // Build the nav stack entry
+  const entry = { id, name: topic.name, subject: topic.subject };
+  navStack.push(entry);
+  suppressingPop = true;
+  window.location.hash = `topic=${id}`;
+  suppressingPop = false;
+  updateBackBar();
+}
+
+function replaceHash(id) {
+  const topic = topicById[id];
+  if (!topic) return;
+
+  if (navStack.length > 0) navStack.pop();
+  navStack.push({ id, name: topic.name, subject: topic.subject });
+  suppressingPop = true;
+  window.location.hash = `topic=${id}`;
+  suppressingPop = false;
+  updateBackBar();
+}
+
+function clearHash() {
+  suppressingPop = true;
+  window.location.hash = '';
+  suppressingPop = false;
+  navStack = [];
+  updateBackBar();
+}
+
+function goBack() {
+  if (navStack.length <= 1) {
+    // Go to list view
+    const currentId = navStack.length > 0 ? navStack[0].id : null;
+    if (currentId) collapseTopic(currentId);
+    clearHash();
+    return;
+  }
+  navStack.pop();
+  const prev = navStack[navStack.length - 1];
+  suppressingPop = true;
+  window.location.hash = `topic=${prev.id}`;
+  suppressingPop = false;
+
+  // Collapse current, expand prev
+  const allDetails = document.querySelectorAll('tr.row-detail.open');
+  allDetails.forEach(r => r.classList.remove('open'));
+  expandTopic(prev.id, false);
+  updateBackBar();
+}
+
+// Handle browser back/forward
+window.addEventListener('hashchange', () => {
+  if (suppressingPop) return;
+  const id = parseHash();
+  if (!id) {
+    // Back to list
+    collapseAll();
+    navStack = [];
+    updateBackBar();
+    return;
+  }
+
+  // Figure out if we went forward or back in navStack
+  const idx = navStack.findIndex(e => e.id === id);
+  if (idx >= 0) {
+    // Pop back to this entry
+    navStack = navStack.slice(0, idx + 1);
+    collapseAll();
+    expandTopic(id, false);
+  } else {
+    // Direct navigation (URL paste or bookmark)
+    if (topicById[id]) {
+      collapseAll();
+      navStack = [{ id, name: topicById[id].name, subject: topicById[id].subject }];
+      expandTopic(id, false);
+    }
+  }
+  updateBackBar();
+});
+
+function updateBackBar() {
+  const bar = document.getElementById('back-bar');
+  const path = document.getElementById('topic-path');
+  if (navStack.length <= 1) {
+    bar.classList.remove('visible');
+    return;
+  }
+  bar.classList.add('visible');
+  // Show breadcrumb-like path
+  const parts = navStack.slice(0, -1).map(e =>
+    `<a class="back-link" data-nav-id="${e.id}">${escapeHtml(e.name)}</a>`
+  ).join(' → ');
+  const current = navStack[navStack.length - 1];
+  path.innerHTML = parts + (parts ? ' → ' : '') + `<strong>${escapeHtml(current.name)}</strong>`;
+
+  // Bind clicks on intermediate breadcrumbs
+  path.querySelectorAll('[data-nav-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const targetId = el.dataset.navId;
+      const idx = navStack.findIndex(e => e.id === targetId);
+      if (idx >= 0) {
+        navStack = navStack.slice(0, idx + 1);
+        const prev = navStack[navStack.length - 1];
+        collapseAll();
+        suppressingPop = true;
+        window.location.hash = `topic=${prev.id}`;
+        suppressingPop = false;
+        expandTopic(prev.id, false);
+        updateBackBar();
+      }
+    });
+  });
+}
+
+document.getElementById('back-link').addEventListener('click', goBack);
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// ── Filters ───────────────────────────────────────────────────────────────
+function populateFilters() {
+  const subjects = [...new Set(topics.map(t => t.subject))].sort();
+  const selS = document.getElementById('subject');
+  for (const s of subjects) {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    selS.appendChild(o);
+  }
+
+  const domains = [...new Set(topics.map(t => t.domain))].sort();
+  const selD = document.getElementById('domain');
+  for (const d of domains) {
+    const o = document.createElement('option');
+    o.value = d; o.textContent = d;
+    selD.appendChild(o);
+  }
+
+  const types = [...new Set(topics.map(t => t.type))].sort();
+  const selT = document.getElementById('type');
+  for (const tp of types) {
+    const o = document.createElement('option');
+    o.value = tp; o.textContent = tp;
+    selT.appendChild(o);
+  }
+
+  const pills = document.getElementById('age-pills');
+  for (let a = AGE_MIN; a <= AGE_MAX; a++) {
+    const s = document.createElement('span');
+    s.textContent = a;
+    s.dataset.age = a;
+    s.addEventListener('click', () => toggleAge(a));
+    pills.appendChild(s);
+  }
+}
+
+let selectingAgeEnd = false;
+
+function toggleAge(age) {
+  if (!selectingAgeEnd || ageFilter.start === null) {
+    ageFilter.start = age;
+    ageFilter.end = null;
+    selectingAgeEnd = true;
+  } else {
+    if (age < ageFilter.start) {
+      ageFilter.end = ageFilter.start;
+      ageFilter.start = age;
+    } else {
+      ageFilter.end = age;
+    }
+    selectingAgeEnd = false;
+  }
+  updateAgePills();
+  filterAndRender();
+}
+
+function updateAgePills() {
+  document.querySelectorAll('#age-pills span').forEach(s => {
+    const a = parseInt(s.dataset.age);
+    s.classList.toggle('active',
+      a === ageFilter.start && (ageFilter.end === null || a === ageFilter.end));
+    s.classList.toggle('in-range',
+      ageFilter.start !== null && ageFilter.end !== null &&
+      a >= ageFilter.start && a <= ageFilter.end);
+  });
+}
+
+document.getElementById('age-clear').addEventListener('click', () => {
+  ageFilter = { start: null, end: null };
+  selectingAgeEnd = false;
+  updateAgePills();
+  filterAndRender();
+});
+
+function matches(topic, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return topic.name.toLowerCase().includes(q) ||
+    topic.description.toLowerCase().includes(q) ||
+    (topic.subject && topic.subject.toLowerCase().includes(q)) ||
+    (topic.domain && topic.domain.toLowerCase().includes(q)) ||
+    (topic.type && topic.type.toLowerCase().includes(q)) ||
+    (topic.evidence && topic.evidence.some(e => e.toLowerCase().includes(q)));
+}
+
+function filterAndRender() {
+  const query = document.getElementById('search').value;
+  const subj = document.getElementById('subject').value;
+  const dom = document.getElementById('domain').value;
+  const typ = document.getElementById('type').value;
+
+  let filtered = topics.filter(t => {
+    if (subj && t.subject !== subj) return false;
+    if (dom && t.domain !== dom) return false;
+    if (typ && t.type !== typ) return false;
+    if (!matches(t, query)) return false;
+    if (ageFilter.start !== null) {
+      if (t.ageRangeEnd < ageFilter.start) return false;
+      if (ageFilter.end !== null && t.ageRangeStart > ageFilter.end) return false;
+      if (ageFilter.end === null && (t.ageRangeStart > ageFilter.start || t.ageRangeEnd < ageFilter.start)) return false;
+    }
+    return true;
+  });
+
+  rows_data = filtered;
+  sortAndRender();
+}
+
+// ── Sorting ────────────────────────────────────────────────────────────────
+function sortAndRender() {
+  const col = sortCol;
+  const dir = sortDir;
+  rows_data.sort((a, b) => {
+    let va, vb;
+    switch (col) {
+      case 'name':        va = a.name; vb = b.name; break;
+      case 'subject':     va = a.subject; vb = b.subject; break;
+      case 'domain':      va = a.domain; vb = b.domain; break;
+      case 'type':        va = a.type; vb = b.type; break;
+      case 'ageStart':    va = a.ageRangeStart; vb = b.ageRangeStart; break;
+      case 'description': va = a.description; vb = b.description; break;
+      default: va = a.name; vb = b.name;
+    }
+    return dir * (typeof va === 'string' ? va.localeCompare(vb) : (va - vb));
+  });
+  render();
+}
+
+// ── Expand / Collapse ──────────────────────────────────────────────────────
+let expandedId = null;
+
+function expandTopic(id, pushState = true) {
+  const topic = topicById[id];
+  if (!topic) return;
+
+  // Collapse previous
+  if (expandedId) {
+    const prevDetail = document.querySelector(`tr.row-detail[data-detail-id="${expandedId}"]`);
+    if (prevDetail) prevDetail.classList.remove('open');
+    const prevMain = document.querySelector(`tr.row-main[data-id="${expandedId}"]`);
+    if (prevMain) prevMain.classList.remove('highlighted');
+  }
+
+  expandedId = id;
+  if (pushState) pushHash(id);
+  else replaceHash(id);
+
+  // Expand new
+  const detail = document.querySelector(`tr.row-detail[data-detail-id="${id}"]`);
+  if (detail) detail.classList.add('open');
+
+  const main = document.querySelector(`tr.row-main[data-id="${id}"]`);
+  if (main) {
+    main.classList.add('highlighted');
+    main.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function collapseTopic(id) {
+  const detail = document.querySelector(`tr.row-detail[data-detail-id="${id}"]`);
+  if (detail) detail.classList.remove('open');
+  const main = document.querySelector(`tr.row-main[data-id="${id}"]`);
+  if (main) main.classList.remove('highlighted');
+  if (expandedId === id) expandedId = null;
+}
+
+function collapseAll() {
+  document.querySelectorAll('tr.row-detail.open').forEach(r => r.classList.remove('open'));
+  document.querySelectorAll('tr.row-main.highlighted').forEach(r => r.classList.remove('highlighted'));
+  expandedId = null;
+}
+
+function navigateToTopic(id) {
+  // Ensure the topic is in the current view (clear filters if needed)
+  if (!topicById[id]) return;
+
+  // Check if it's visible
+  const mainRow = document.querySelector(`tr.row-main[data-id="${id}"]`);
+  if (!mainRow) {
+    // Topic is filtered out — clear search and filters to show it
+    document.getElementById('search').value = '';
+    document.getElementById('subject').value = '';
+    document.getElementById('domain').value = '';
+    document.getElementById('type').value = '';
+    ageFilter = { start: null, end: null };
+    selectingAgeEnd = false;
+    updateAgePills();
+    rows_data = [...topics];
+    sortAndRender();
+  }
+
+  // Expand the topic
+  expandTopic(id, true);
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function highlight(text, query) {
+  if (!query) return text;
+  const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${q})`, 'gi');
+  return text.replace(re, '<em class="highlight">$1</em>');
+}
+
+function render() {
+  const tbody = document.getElementById('table-body');
+  const query = document.getElementById('search').value;
+  const count = document.getElementById('result-count');
+
+  if (rows_data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="no-results">No topics match your filters</div></td></tr>';
+    count.textContent = 'Showing 0 topics';
+    return;
+  }
+
+  count.textContent = `Showing ${rows_data.length} of ${topics.length} topics`;
+
+  let html = '';
+  for (const t of rows_data) {
+    const ageLabel = t.ageRangeStart === t.ageRangeEnd
+      ? `${t.ageRangeStart}`
+      : `${t.ageRangeStart}–${t.ageRangeEnd}`;
+    const depInfo = depsById[t.id];
+
+    html += `<tr class="row-main" data-id="${t.id}">
+      <td class="name-col">${highlight(t.name, query)}</td>
+      <td><span class="badge badge-subject">${highlight(t.subject, query)}</span></td>
+      <td>${highlight(t.domain, query)}</td>
+      <td><span class="badge badge-type">${highlight(t.type, query)}</span></td>
+      <td style="text-align:center;"><span class="badge badge-age">${ageLabel}</span></td>
+      <td class="desc">${highlight(
+        t.description.length > 120 ? t.description.slice(0, 120) + '…' : t.description, query)}</td>
+    </tr>`;
+
+    html += `<tr class="row-detail" data-detail-id="${t.id}">
+      <td colspan="6"><div class="detail-inner">`;
+
+    // Evidence
+    if (t.evidence && t.evidence.length) {
+      html += `<div class="detail-section">
+        <h3>📋 Evidence of Mastery</h3>
+        <ul>${t.evidence.map(e => `<li>${highlight(e, query)}</li>`).join('')}</ul>
+      </div>`;
+    }
+
+    // Assessment prompt
+    if (t.assessmentPrompt) {
+      html += `<div class="detail-section">
+        <h3>💬 Assessment Prompt</h3>
+        <div class="detail-prompt">${highlight(
+          t.assessmentPrompt.replace(/\{\{name\}\}/g, '[child\'s name]'), query)}</div>
+      </div>`;
+    }
+
+    // Full description
+    html += `<div class="detail-section">
+      <h3>📝 Full Description</h3>
+      <p style="font-size:13px;color:var(--text);">${highlight(t.description, query)}</p>
+    </div>`;
+
+    // Prerequisites
+    if (depInfo && depInfo.prereqs.length) {
+      html += `<div class="detail-section">
+        <h3>🔗 Prerequisites (${depInfo.prereqs.length}) — must learn first</h3>`;
+      for (const dep of depInfo.prereqs) {
+        const prereq = topicById[dep.prerequisiteId];
+        const name = prereq ? prereq.name : dep.prerequisiteId;
+        html += `<div class="dep-item">
+          <span class="dep-strength ${dep.strength}">${dep.strength}</span>
+          <span class="dep-name" data-nav-id="${dep.prerequisiteId}">${escapeHtml(name)}</span>
+          <div class="dep-reason">${escapeHtml(dep.reason)}</div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Unlocks
+    if (depInfo && depInfo.unlocks.length) {
+      html += `<div class="detail-section">
+        <h3>🚀 Unlocks (${depInfo.unlocks.length}) — what this enables</h3>`;
+      for (const dep of depInfo.unlocks) {
+        const unlocked = topicById[dep.topicId];
+        const name = unlocked ? unlocked.name : dep.topicId;
+        html += `<div class="dep-item">
+          <span class="dep-strength ${dep.strength}">${dep.strength}</span>
+          <span class="dep-name" data-nav-id="${dep.topicId}">${escapeHtml(name)}</span>
+          <div class="dep-reason">${escapeHtml(dep.reason)}</div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Standards
+    if (t.standards && t.standards.length) {
+      html += `<div class="detail-section">
+        <h3>📚 Standards (${t.standards.length})</h3>
+        <ul>${t.standards.map(s =>
+          `<li style="font-size:12px;color:var(--text-muted);font-family:monospace;">${escapeHtml(s)}</li>`
+        ).join('')}</ul>
+      </div>`;
+    }
+
+    html += `<div class="detail-section" style="margin-bottom:0;">
+      <h3>📊 Centrality: ${t.centrality.toFixed(4)}</h3>
+    </div>`;
+
+    html += `</div></td></tr>`;
+  }
+
+  tbody.innerHTML = html;
+
+  // Row click — expand detail
+  tbody.querySelectorAll('.row-main').forEach(row => {
+    row.addEventListener('click', (e) => {
+      // Don't trigger if they clicked a dep link inside the row (shouldn't happen, but safety)
+      if (e.target.closest('.dep-name')) return;
+      const id = row.dataset.id;
+      if (expandedId === id) {
+        collapseTopic(id);
+        clearHash();
+      } else {
+        expandTopic(id, true);
+      }
+    });
+  });
+
+  // Dependency name clicks — navigate to that topic
+  tbody.querySelectorAll('.dep-name').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigateToTopic(el.dataset.navId);
+    });
+  });
+
+  // Re-apply expanded state if it exists
+  if (expandedId) {
+    const detail = document.querySelector(`tr.row-detail[data-detail-id="${expandedId}"]`);
+    if (detail) detail.classList.add('open');
+    const main = document.querySelector(`tr.row-main[data-id="${expandedId}"]`);
+    if (main) main.classList.add('highlighted');
+  }
+}
+
+// ── Event bindings ────────────────────────────────────────────────────────
+document.getElementById('search').addEventListener('input', filterAndRender);
+document.getElementById('subject').addEventListener('change', () => {
+  const subj = document.getElementById('subject').value;
+  const doms = subj
+    ? [...new Set(topics.filter(t => t.subject === subj).map(t => t.domain))].sort()
+    : [...new Set(topics.map(t => t.domain))].sort();
+  const selD = document.getElementById('domain');
+  const curDom = selD.value;
+  selD.innerHTML = '<option value="">All</option>';
+  for (const d of doms) {
+    const o = document.createElement('option');
+    o.value = d; o.textContent = d;
+    selD.appendChild(o);
+  }
+  if (doms.includes(curDom)) selD.value = curDom;
+  else selD.value = '';
+  filterAndRender();
+});
+document.getElementById('domain').addEventListener('change', filterAndRender);
+document.getElementById('type').addEventListener('change', filterAndRender);
+
+document.querySelectorAll('thead th').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (col === sortCol) sortDir *= -1;
+    else { sortCol = col; sortDir = 1; }
+    document.querySelectorAll('thead th').forEach(h => h.classList.remove('sorted'));
+    th.classList.add('sorted');
+    th.querySelector('.sort-arrow').textContent = sortDir === 1 ? '▲' : '▼';
+    sortAndRender();
+  });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (expandedId) {
+      collapseTopic(expandedId);
+      clearHash();
+    }
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────
+load();
+</script>
+</body>
+</html>
