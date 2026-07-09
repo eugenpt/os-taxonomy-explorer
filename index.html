@@ -478,7 +478,7 @@ function loadFilterState() {
     document.getElementById('subject').value = subj;
     // Rebuild domain dropdown filtered by this subject
     const doms = [...new Set(topics.filter(t => t.subject === subj).map(t => t.domain))].sort();
-    buildDomainDropdown(doms);
+    updateDomainOptions(doms);
   }
   if (dom) setDomainValue(dom);
   if (age) {
@@ -609,65 +609,27 @@ function buildDomainDropdown(domains) {
   const input = document.getElementById('domain-input');
   const searchIn = container.querySelector('.search-in');
 
-  function renderOptions(filter) {
-    const q = (filter || '').toLowerCase();
-    let filtered = domainOptions.filter(d => !q || d.toLowerCase().includes(q));
-    // Always show "All" at top when no filter, or if it matches
-    if (!q || 'all'.includes(q)) {
-      filtered = ['', ...filtered];
-    }
-    if (filtered.length === 0) {
-      wrap.innerHTML = '<div class="no-match">No matching domains</div>';
-      return;
-    }
-    wrap.innerHTML = filtered.map(d =>
-      `<div class="opt${d === domainValue ? ' selected' : ''}${d === '' ? ' is-all' : ''}" data-val="${d}">${d ? escapeHtml(d) : '<em>All</em>'}</div>`
-    ).join('');
-
-    // Click to select
-    wrap.querySelectorAll('.opt').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const val = el.dataset.val;
-        domainValue = val;
-        input.value = val;
-        container.classList.remove('open');
-        filterAndRender();
-      });
-    });
-
-    // Hover tracking for keyboard nav
-    wrap.querySelectorAll('.opt').forEach(el => {
-      el.addEventListener('mouseenter', () => {
-        wrap.querySelectorAll('.opt.highlight').forEach(h => h.classList.remove('highlight'));
-        el.classList.add('highlight');
-      });
-    });
-  }
+  renderDomainOptions(wrap, '');
 
   // Toggle open/close
-  function openPanel() {
-    container.classList.add('open');
-    searchIn.value = '';
-    renderOptions('');
-    searchIn.focus();
-  }
-
   input.addEventListener('click', (e) => {
     e.stopPropagation();
     if (container.classList.contains('open')) {
       container.classList.remove('open');
     } else {
-      openPanel();
+      container.classList.add('open');
+      searchIn.value = '';
+      renderDomainOptions(wrap, '');
+      searchIn.focus();
     }
   });
 
   searchIn.addEventListener('input', () => {
-    renderOptions(searchIn.value);
+    renderDomainOptions(wrap, searchIn.value);
   });
 
   searchIn.addEventListener('keydown', (e) => {
-    const items = wrap.querySelectorAll('.opt');
+    const items = wrap.querySelectorAll('.opt:not(.is-all)');
     const cur = wrap.querySelector('.opt.highlight');
     let idx = -1;
     if (cur) idx = [...items].indexOf(cur);
@@ -696,12 +658,14 @@ function buildDomainDropdown(domains) {
     }
   });
 
-  // Close on click outside
-  document.addEventListener('click', (e) => {
+  // Close on click outside (only once)
+  document.removeEventListener('click', closeDomainPanel);
+  document.addEventListener('click', closeDomainPanel);
+  function closeDomainPanel(e) {
     if (!container.contains(e.target)) {
       container.classList.remove('open');
     }
-  });
+  }
 
   // Clear button
   document.getElementById('clear-domain').addEventListener('click', (e) => {
@@ -710,9 +674,47 @@ function buildDomainDropdown(domains) {
     container.classList.remove('open');
     filterAndRender();
   });
+}
 
-  // Allow clearing by clicking the input when already selected and panel opens
-  renderOptions('');
+function renderDomainOptions(wrap, filter) {
+  const q = (filter || '').toLowerCase();
+  let filtered = domainOptions.filter(d => !q || d.toLowerCase().includes(q));
+  if (!q || 'all'.includes(q)) {
+    filtered = ['', ...filtered];
+  }
+  if (filtered.length === 0) {
+    wrap.innerHTML = '<div class="no-match">No matching domains</div>';
+    return;
+  }
+  wrap.innerHTML = filtered.map(d =>
+    `<div class="opt${d === domainValue ? ' selected' : ''}${d === '' ? ' is-all' : ''}" data-val="${d}">${d ? escapeHtml(d) : '<em>All</em>'}</div>`
+  ).join('');
+
+  wrap.querySelectorAll('.opt').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = el.dataset.val;
+      domainValue = val;
+      document.getElementById('domain-input').value = val;
+      document.getElementById('domain-select').classList.remove('open');
+      filterAndRender();
+    });
+    el.addEventListener('mouseenter', () => {
+      wrap.querySelectorAll('.opt.highlight').forEach(h => h.classList.remove('highlight'));
+      el.classList.add('highlight');
+    });
+  });
+}
+
+function updateDomainOptions(domains) {
+  domainOptions = domains;
+  if (!domainOptions.includes(domainValue)) {
+    domainValue = '';
+    document.getElementById('domain-input').value = '';
+    document.getElementById('domain-select').classList.remove('has-value');
+  }
+  const wrap = document.querySelector('#domain-select .opts-wrap');
+  renderDomainOptions(wrap, '');
 }
 
 function getDomainValue() {
@@ -1044,7 +1046,7 @@ document.getElementById('subject').addEventListener('change', () => {
     ? [...new Set(topics.filter(t => t.subject === subj).map(t => t.domain))].sort()
     : [...new Set(topics.map(t => t.domain))].sort();
   const curDom = getDomainValue();
-  buildDomainDropdown(doms);
+  updateDomainOptions(doms);
   if (doms.includes(curDom)) setDomainValue(curDom);
   else setDomainValue('');
   filterAndRender();
