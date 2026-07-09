@@ -474,7 +474,7 @@ function saveFilterState() {
   }
   const qs = params.toString();
   const hash = window.location.hash;
-  const newUrl = qs ? `?${qs}${hash}` : `${hash || '/'}`;
+  const newUrl = qs ? `?${qs}${hash}` : `${window.location.pathname}${hash || '/'}`;
   window.history.replaceState(null, '', newUrl);
 }
 
