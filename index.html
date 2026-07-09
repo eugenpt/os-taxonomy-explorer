@@ -875,7 +875,7 @@ function expandTopic(id, pushState = true) {
   const main = document.querySelector(`tr.row-main[data-id="${id}"]`);
   if (main) {
     main.classList.add('highlighted');
-    main.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    main.scrollIntoView({ block: 'nearest' });
   }
 }
 
@@ -936,6 +936,13 @@ function render() {
   }
 
   count.textContent = `Showing ${rows_data.length} of ${topics.length} topics`;
+
+  // Remember scroll position of expanded topic before DOM rebuild
+  let prevExpandedTop = null;
+  if (expandedId) {
+    const prevMain = document.querySelector(`tr.row-main[data-id="${expandedId}"]`);
+    if (prevMain) prevExpandedTop = prevMain.getBoundingClientRect().top;
+  }
 
   let html = '';
   for (const t of rows_data) {
@@ -1061,7 +1068,11 @@ function render() {
     const main = document.querySelector(`tr.row-main[data-id="${expandedId}"]`);
     if (main) {
       main.classList.add('highlighted');
-      main.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Restore the same viewport-relative position as before re-render
+      if (prevExpandedTop !== null) {
+        const newTop = main.getBoundingClientRect().top;
+        window.scrollBy(0, newTop - prevExpandedTop);
+      }
     }
   }
 }
