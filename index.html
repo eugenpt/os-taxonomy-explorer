@@ -203,6 +203,14 @@
     color: var(--text-muted); font-size: 10px; pointer-events: none;
     transition: transform 0.15s;
   }
+  .searchable-select .clear-dom {
+    display: none; position: absolute; right: 22px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); font-size: 14px; cursor: pointer; line-height: 1;
+    padding: 2px; border-radius: 50%; width: 18px; height: 18px;
+    align-items: center; justify-content: center;
+  }
+  .searchable-select .clear-dom:hover { color: var(--text); background: var(--border); }
+  .searchable-select.has-value .clear-dom { display: flex; }
   .searchable-select.open .arrow { transform: translateY(-50%) rotate(180deg); }
   .searchable-select .panel {
     display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
@@ -260,6 +268,7 @@
       <label for="domain">Domain</label>
       <div class="searchable-select" id="domain-select">
         <input type="text" id="domain-input" placeholder="All" readonly autocomplete="off">
+        <span class="clear-dom" id="clear-domain">×</span>
         <span class="arrow">▼</span>
         <div class="panel">
           <input type="text" class="search-in" placeholder="Search domains…" autocomplete="off">
@@ -603,13 +612,17 @@ function buildDomainDropdown(domains) {
 
   function renderOptions(filter) {
     const q = (filter || '').toLowerCase();
-    const filtered = domainOptions.filter(d => !q || d.toLowerCase().includes(q));
+    let filtered = domainOptions.filter(d => !q || d.toLowerCase().includes(q));
+    // Always show "All" at top when no filter, or if it matches
+    if (!q || 'all'.includes(q)) {
+      filtered = ['', ...filtered];
+    }
     if (filtered.length === 0) {
       wrap.innerHTML = '<div class="no-match">No matching domains</div>';
       return;
     }
     wrap.innerHTML = filtered.map(d =>
-      `<div class="opt${d === domainValue ? ' selected' : ''}" data-val="${d}">${escapeHtml(d)}</div>`
+      `<div class="opt${d === domainValue ? ' selected' : ''}${d === '' ? ' is-all' : ''}" data-val="${d}">${d ? escapeHtml(d) : '<em>All</em>'}</div>`
     ).join('');
 
     // Click to select
@@ -691,7 +704,14 @@ function buildDomainDropdown(domains) {
     }
   });
 
-  // Clear button in the domain input (when a value is selected, clicking again shows "All")
+  // Clear button
+  document.getElementById('clear-domain').addEventListener('click', (e) => {
+    e.stopPropagation();
+    setDomainValue('');
+    container.classList.remove('open');
+    filterAndRender();
+  });
+
   // Allow clearing by clicking the input when already selected and panel opens
   renderOptions('');
 }
@@ -703,6 +723,7 @@ function getDomainValue() {
 function setDomainValue(val) {
   domainValue = val || '';
   document.getElementById('domain-input').value = val || '';
+  document.getElementById('domain-select').classList.toggle('has-value', !!val);
   // Update selection highlight
   document.querySelectorAll('#domain-select .opt').forEach(el => {
     el.classList.toggle('selected', el.dataset.val === val);
