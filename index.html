@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="version" content="2026-07-09.4">
+<meta name="version" content="2026-07-09.3">
 <title>OS Taxonomy Explorer</title>
 <style>
   :root {
@@ -173,38 +173,6 @@
     display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
   }
   .dep-item:last-child { border-bottom: none; }
-  .dep-item .dep-edit-btn {
-    margin-left: auto; cursor: pointer; color: var(--text-muted); font-size: 12px;
-    padding: 0 6px; border-radius: 3px; opacity: 0; transition: all 0.15s;
-  }
-  .dep-item:hover .dep-edit-btn { opacity: 1; }
-  .dep-item .dep-edit-btn:hover { color: var(--accent); background: var(--accent-glow); }
-  .dep-editor {
-    width: 100%; margin-top: 6px; padding: 10px 12px;
-    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  }
-  .dep-editor .ed-row {
-    display: flex; gap: 8px; align-items: center; margin-bottom: 6px;
-  }
-  .dep-editor .ed-row label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; min-width: 40px; }
-  .dep-editor input, .dep-editor select {
-    flex: 1; padding: 4px 8px; background: var(--surface); border: 1px solid var(--border);
-    border-radius: 3px; color: var(--text); font-size: 12px; outline: none;
-  }
-  .dep-editor input:focus, .dep-editor select:focus { border-color: var(--accent); }
-  .dep-editor .ed-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; }
-  .dep-editor .ed-actions button {
-    padding: 4px 12px; border-radius: 3px; font-size: 12px; cursor: pointer; border: 1px solid var(--border);
-    background: var(--surface); color: var(--text); transition: all 0.1s;
-  }
-  .dep-editor .ed-actions .ed-save { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .dep-editor .ed-actions .ed-save:hover { opacity: 0.85; }
-  .dep-editor .ed-actions .ed-cancel:hover { border-color: var(--text-muted); }
-  .type-pill-add {
-    display: inline-flex; align-items: center; gap: 2px; cursor: pointer;
-    font-size: 10px; color: var(--accent); padding: 1px 6px; border-radius: 3px;
-  }
-  .type-pill-add:hover { background: var(--accent-glow); }
   .dep-strength { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
   .dep-strength.hard { background: rgba(248,81,73,0.15); color: var(--red); }
   .dep-strength.soft { background: rgba(210,153,34,0.15); color: var(--yellow); }
@@ -384,7 +352,6 @@ const DATA_DEPS      = 'https://raw.githubusercontent.com/withmarbleapp/os-taxon
 // ── State ──────────────────────────────────────────────────────────────────
 let topics = [];
 let depsById = {};   // topicId -> {prereqs: [...], unlocks: [...]}
-let depsData = [];   // raw dependency objects
 let rows_data = [];
 let topicById = {};
 
@@ -412,7 +379,6 @@ async function load() {
     for (const t of topics) topicById[t.id] = t;
 
     depsById = {};
-    depsData = dData.dependencies;
     for (const t of topics) {
       depsById[t.id] = { prereqs: [], unlocks: [] };
     }
@@ -1039,12 +1005,10 @@ function render() {
       for (const dep of depInfo.prereqs) {
         const prereq = topicById[dep.prerequisiteId];
         const name = prereq ? prereq.name : dep.prerequisiteId;
-        const depKey = encodeURIComponent(dep.prerequisiteId + '|' + dep.topicId);
-        html += `<div class="dep-item" data-dep-key="${depKey}" data-dep-type="prereq">
+        html += `<div class="dep-item">
           <span class="dep-strength ${dep.strength}">${dep.strength}</span>
           <span class="dep-name" data-nav-id="${dep.prerequisiteId}">${escapeHtml(name)}</span>
           <div class="dep-reason">${escapeHtml(dep.reason)}</div>
-          <span class="dep-edit-btn" title="Edit dependency">✎</span>
         </div>`;
       }
       html += `</div>`;
@@ -1057,12 +1021,10 @@ function render() {
       for (const dep of depInfo.unlocks) {
         const unlocked = topicById[dep.topicId];
         const name = unlocked ? unlocked.name : dep.topicId;
-        const depKey = encodeURIComponent(dep.prerequisiteId + '|' + dep.topicId);
-        html += `<div class="dep-item" data-dep-key="${depKey}" data-dep-type="unlock">
+        html += `<div class="dep-item">
           <span class="dep-strength ${dep.strength}">${dep.strength}</span>
           <span class="dep-name" data-nav-id="${dep.topicId}">${escapeHtml(name)}</span>
           <div class="dep-reason">${escapeHtml(dep.reason)}</div>
-          <span class="dep-edit-btn" title="Edit dependency">✎</span>
         </div>`;
       }
       html += `</div>`;
@@ -1107,85 +1069,6 @@ function render() {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       navigateToTopic(el.dataset.navId);
-    });
-  });
-
-  // Dependency edit buttons — open inline editor
-  let customTypes = ['hard', 'soft'];
-  tbody.querySelectorAll('.dep-edit-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const item = btn.closest('.dep-item');
-      if (!item || item.querySelector('.dep-editor')) return; // already editing
-      const depKey = decodeURIComponent(item.dataset.depKey);
-      const [fromId, toId] = depKey.split('|');
-      const dep = depsData.find(d => d.prerequisiteId === fromId && d.topicId === toId);
-      if (!dep) return;
-
-      const editor = document.createElement('div');
-      editor.className = 'dep-editor';
-      const fromName = topicById[fromId] ? topicById[fromId].name : fromId;
-      const toName = topicById[toId] ? topicById[toId].name : toId;
-      const currentType = dep.strength;
-      const typeOpts = customTypes.map(t => `<option value="${t}"${t===currentType?' selected':''}>${t}</option>`).join('');
-
-      editor.innerHTML = `
-        <div class="ed-row"><label>FROM</label><input class="ed-from" value="${escapeHtml(fromName)}" title="ID: ${fromId}"></div>
-        <div class="ed-row"><label>TO</label><input class="ed-to" value="${escapeHtml(toName)}" title="ID: ${toId}"></div>
-        <div class="ed-row"><label>TYPE</label>
-          <select class="ed-type">${typeOpts}</select>
-          <span class="type-pill-add" id="add-type-btn">+ add</span>
-        </div>
-        <div class="ed-row"><label>REASON</label><input class="ed-reason" value="${escapeHtml(dep.reason || '')}"></div>
-        <div class="ed-actions">
-          <button class="ed-cancel">Cancel</button>
-          <button class="ed-save">Save</button>
-        </div>
-      `;
-      item.appendChild(editor);
-
-      // Add custom type
-      editor.querySelector('#add-type-btn').addEventListener('click', () => {
-        const newType = prompt('Enter new type:');
-        if (newType && newType.trim() && !customTypes.includes(newType.trim())) {
-          customTypes.push(newType.trim());
-          const sel = editor.querySelector('.ed-type');
-          const opt = document.createElement('option');
-          opt.value = newType.trim(); opt.textContent = newType.trim(); opt.selected = true;
-          sel.appendChild(opt);
-        }
-      });
-
-      // Cancel
-      editor.querySelector('.ed-cancel').addEventListener('click', (e) => {
-        e.stopPropagation();
-        editor.remove();
-      });
-
-      // Save
-      editor.querySelector('.ed-save').addEventListener('click', (e) => {
-        e.stopPropagation();
-        dep.strength = editor.querySelector('.ed-type').value;
-        dep.reason = editor.querySelector('.ed-reason').value;
-        editor.remove();
-        // Re-render the current detail view
-        render();
-        if (expandedId) {
-          const detail = document.querySelector(`tr.row-detail[data-detail-id="${expandedId}"]`);
-          if (detail) detail.classList.add('open');
-          const main = document.querySelector(`tr.row-main[data-id="${expandedId}"]`);
-          if (main) main.classList.add('highlighted');
-        }
-      });
-
-      // Allow Enter to save
-      editor.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          editor.querySelector('.ed-save').click();
-        }
-        if (e.key === 'Escape') editor.querySelector('.ed-cancel').click();
-      });
     });
   });
 
